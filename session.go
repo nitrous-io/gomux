@@ -1,12 +1,16 @@
 package gomux
 
 import (
-	"github.com/kr/pty"
+	"bytes"
 	"io"
 	"os"
 	"os/exec"
+	"sync"
 	"syscall"
 	"unsafe"
+
+	du "github.com/dotcloud/docker/utils"
+	"github.com/kr/pty"
 )
 
 type Winsize struct {
@@ -17,10 +21,14 @@ type Winsize struct {
 }
 
 type Session struct {
-	Width   int
-	Height  int
-	Pty     *os.File
+	sync.Mutex
+	Width  int
+	Height int
+	Pty    *os.File
+
 	NumConn int
+	buf     *bytes.Buffer
+	writers map[io.WriteCloser]bool
 }
 
 func NewSession() *Session {
@@ -28,7 +36,14 @@ func NewSession() *Session {
 	if err != nil {
 		panic("should not failed")
 	}
-	return &Session{Pty: pty}
+	s := &Session{Pty: pty, writers: make(map[io.WriteCloser]bool),
+		buf: bytes.NewBuffer(nil)}
+	// session acts as the broadcaster so we copy output from pty directly to
+	// the session
+	go func() {
+		io.Copy(s, s.Pty)
+	}()
+	return s
 }
 
 func (s *Session) Resize(w, h int) error {
@@ -42,6 +57,38 @@ func (s *Session) Resize(w, h int) error {
 	return err
 }
 
+func (s *Session) StdoutPipe() (io.ReadCloser, error) {
+	s.Lock()
+	defer s.Unlock()
+	reader, writer := io.Pipe()
+	s.writers[writer] = true
+	return du.NewBufReader(reader), nil
+}
+
+func (s *Session) Write(p []byte) (n int, err error) {
+	s.Lock()
+	defer s.Unlock()
+	s.buf.Write(p)
+	for w := range s.writers {
+		lp := p
+		if n, err := w.Write(lp); err != nil || n != len(lp) {
+			// On error, evict the writer
+			delete(s.writers, w)
+		}
+	}
+	return len(p), nil
+}
+
+func (s *Session) CloseWriters() error {
+	s.Lock()
+	defer s.Unlock()
+	for w := range s.writers {
+		w.Close()
+	}
+	s.writers = make(map[io.WriteCloser]bool)
+	return nil
+}
+
 func (s *Session) Attach(stdin io.ReadCloser, stdout io.Writer) chan error {
 	s.NumConn += 1
 	errors := make(chan error, 2)
@@ -53,12 +100,18 @@ func (s *Session) Attach(stdin io.ReadCloser, stdout io.Writer) chan error {
 		}
 		errors <- err
 	}()
+	// stdout
 	go func() {
-		_, err := io.Copy(stdout, s.Pty)
-		if err == io.ErrClosedPipe {
-			err = nil
+		p, err := s.StdoutPipe()
+		if err != nil {
+			errors <- err
+		} else {
+			_, err := io.Copy(stdout, p)
+			if err == io.ErrClosedPipe {
+				err = nil
+			}
+			errors <- err
 		}
-		errors <- err
 	}()
 	return Go(func() error {
 		for i := 0; i < 2; i += 1 {
