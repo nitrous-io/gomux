@@ -42,12 +42,12 @@ func (m *Message) ParseAttach(d string) (err error) {
 }
 
 func (m *Message) ParseResize(d string) (err error) {
-	_, err = fmt.Sscanf(d, "%d|%d:%d", m.SessionId, m.Width, m.Height)
+	_, err = fmt.Sscanf(d, "%d|%d:%d", &m.SessionId, &m.Width, &m.Height)
 	return
 }
 
 func (m *Message) ParseData(d string) (err error) {
-	_, err = fmt.Sscanf(d, "%d|%s", m.SessionId, m.Data)
+	_, err = fmt.Sscanf(d, "%d|%s", &m.SessionId, &m.Data)
 	return
 }
 

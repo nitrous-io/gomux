@@ -4,6 +4,7 @@ import (
 	"flag"
 	"github.com/action-io/gomux"
 	"log"
+	"os"
 )
 
 func main() {
@@ -12,11 +13,11 @@ func main() {
 	flag.Parse()
 	if *flClient {
 		log.Println("Start client")
-		client := &gomux.Client{SessionId: *flClientId}
+		client := gomux.NewClient(os.Stdin, os.Stdout, *flClientId)
 		client.Connect()
 	} else {
 		log.Println("Start server")
 		m := gomux.NewMux()
-		m.Listen()
+		m.ListenAndServe()
 	}
 }

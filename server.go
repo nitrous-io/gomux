@@ -1,11 +1,13 @@
 package gomux
 
 import (
-	"bytes"
 	"fmt"
 	"io"
 	"net"
-	"os"
+	"net/http"
+	"strconv"
+
+	"github.com/gorilla/mux"
 )
 
 type Mux struct {
@@ -26,55 +28,70 @@ func (m *Mux) Connect(i int) *Session {
 	return s
 }
 
-func (m *Mux) Close() {
-	for _, s := range m.Sessions {
-		s.Close()
+func (m *Mux) ListenAndServe() error {
+	router := m.router()
+	l, e := net.Listen("unix", SERVER)
+	if e != nil {
+		panic("could not listen to " + SERVER)
 	}
+	httpServer := http.Server{Addr: SERVER, Handler: router}
+	return httpServer.Serve(l)
 }
 
-func (m *Mux) Handle(c net.Conn) {
-	defer m.Close()
-	b := make([]byte, 32748)
-	for {
-		n, err := c.Read(b)
-		if err != nil {
-			return
-		}
-		msg, err := ParseMessage(string(b[0:n]))
-		if err != nil {
-			return
-		}
-		fmt.Println(msg)
-		s := m.Connect(msg.SessionId)
-		switch msg.Type {
-		case Attach:
-			s.Conns = append(s.Conns, c)
-			go func() {
-				io.Copy(c, s.Pty)
-			}()
-		case Resize:
-			go s.Resize(msg.Width, msg.Height)
-		case Data:
-			b := bytes.NewBuffer([]byte(msg.Data))
-			go io.Copy(s.Pty, b)
-		}
-	}
-}
-
-func (s *Mux) Listen() {
-	// remove the socket if not exist
-	os.RemoveAll("/tmp/gomux.sock")
-
-	l, err := net.Listen("unix", "/tmp/gomux.sock")
+func (m *Mux) postSessionHandler(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	sessionId, err := strconv.Atoi(params["id"])
 	if err != nil {
-		panic(fmt.Sprintf("listen error %v", err))
+		w.WriteHeader(http.StatusBadRequest)
+		w.Write([]byte("invalid session id"))
+		return
 	}
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			fmt.Printf("accept error %v \n", err)
-			return
+
+	stdin, stdout, err := hijackServer(w)
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("couldnt create connection"))
+		return
+	}
+
+	defer func() {
+		if tcpc, ok := stdin.(*net.TCPConn); ok {
+			tcpc.CloseWrite()
+		} else {
+			stdin.Close()
 		}
-		go s.Handle(conn)
+	}()
+
+	defer func() {
+		if tcpc, ok := stdout.(*net.TCPConn); ok {
+			tcpc.CloseWrite()
+		} else if closer, ok := stdout.(io.Closer); ok {
+			closer.Close()
+		}
+	}()
+
+	defer func() {
+		// do cleanup here for session
+	}()
+
+	fmt.Fprintf(stdout, "HTTP/1.1 200 OK\r\nContent-Type: application/vnd.gomux.raw-stream\r\n\r\n")
+	// create or get the session attached with session id
+	session := m.Connect(sessionId)
+	<-session.Attach(stdin, stdout)
+}
+
+func (m *Mux) router() *mux.Router {
+	r := mux.NewRouter()
+	r.HandleFunc("/session/{id:.*}", m.postSessionHandler).Methods("POST")
+	return r
+}
+
+func hijackServer(w http.ResponseWriter) (io.ReadCloser, io.Writer, error) {
+	conn, _, err := w.(http.Hijacker).Hijack()
+	if err != nil {
+		return nil, nil, err
 	}
+	// Flush the options to make sure the client sets the raw mode
+	conn.Write([]byte{})
+	return conn, conn, nil
 }
