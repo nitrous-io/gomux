@@ -13,13 +13,6 @@ import (
 	"github.com/kr/pty"
 )
 
-type Winsize struct {
-	Height uint16
-	Width  uint16
-	x      uint16
-	y      uint16
-}
-
 type Session struct {
 	sync.Mutex
 	Width  int
@@ -32,12 +25,13 @@ type Session struct {
 }
 
 func NewSession() *Session {
-	pty, err := pty.Start(exec.Command("/bin/bash"))
+	var err error
+	s := &Session{writers: make(map[io.WriteCloser]bool),
+		buf: bytes.NewBuffer(nil)}
+	s.Pty, err = pty.Start(exec.Command("bash"))
 	if err != nil {
 		panic("should not failed")
 	}
-	s := &Session{Pty: pty, writers: make(map[io.WriteCloser]bool),
-		buf: bytes.NewBuffer(nil)}
 	// session acts as the broadcaster so we copy output from pty directly to
 	// the session
 	go func() {
@@ -47,14 +41,8 @@ func NewSession() *Session {
 }
 
 func (s *Session) Resize(w, h int) error {
-	ws := &Winsize{Width: uint16(s.Width), Height: uint16(s.Height)}
-	_, _, err := syscall.Syscall(syscall.SYS_IOCTL, s.Pty.Fd(),
-		uintptr(syscall.TIOCSWINSZ), uintptr(unsafe.Pointer(ws)))
-	// skip errno = 0
-	if err == 0 {
-		return nil
-	}
-	return err
+	return SetWinsize(s.Pty.Fd(),
+		&Winsize{ws_row: uint16(w), ws_col: uint16(h)})
 }
 
 func (s *Session) StdoutPipe() (io.ReadCloser, error) {
@@ -123,45 +111,28 @@ func (s *Session) Attach(stdin io.ReadCloser, stdout io.Writer) chan error {
 	})
 }
 
-// Code c/c from io.Copy() modified to handle escape sequence
-func CopyEscapable(dst io.Writer, src io.ReadCloser) (written int64, err error) {
-	buf := make([]byte, 32*1024)
-	for {
-		nr, er := src.Read(buf)
-		if nr > 0 {
-			// ---- Docker addition
-			// char 16 is C-p
-			if nr == 1 && buf[0] == 16 {
-				nr, er = src.Read(buf)
-				// char 17 is C-q
-				if nr == 1 && buf[0] == 17 {
-					if err := src.Close(); err != nil {
-						return 0, err
-					}
-					return 0, nil
-				}
-			}
-			// ---- End of docker
-			nw, ew := dst.Write(buf[0:nr])
-			if nw > 0 {
-				written += int64(nw)
-			}
-			if ew != nil {
-				err = ew
-				break
-			}
-			if nr != nw {
-				err = io.ErrShortWrite
-				break
-			}
-		}
-		if er == io.EOF {
-			break
-		}
-		if er != nil {
-			err = er
-			break
-		}
+type Winsize struct {
+	ws_row    uint16
+	ws_col    uint16
+	ws_xpixel uint16
+	ws_ypixel uint16
+}
+
+func GetWinsize(fd uintptr) (*Winsize, error) {
+	ws := &Winsize{}
+	_, _, err := syscall.Syscall(syscall.SYS_IOCTL, fd,
+		uintptr(syscall.TIOCGWINSZ), uintptr(unsafe.Pointer(ws)))
+	if err == 0 {
+		return ws, nil
 	}
-	return written, err
+	return ws, err
+}
+
+func SetWinsize(fd uintptr, ws *Winsize) error {
+	_, _, err := syscall.Syscall(syscall.SYS_IOCTL, fd,
+		uintptr(syscall.TIOCSWINSZ), uintptr(unsafe.Pointer(ws)))
+	if err == 0 {
+		return nil
+	}
+	return err
 }
