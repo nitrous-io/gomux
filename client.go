@@ -53,13 +53,14 @@ func (c *Client) Connect(server string) error {
 
 	dial, err := net.Dial("unix", server)
 	if err != nil {
-		panic("Can't connect to gomux daemon")
+		return fmt.Errorf("Can't connect to gomux daemon %v", server)
 	}
 	clientconn := httputil.NewClientConn(dial, nil)
 	defer clientconn.Close()
 	// Server hijacks the connection, error 'connection closed' expected
 	clientconn.Do(req)
 
+	// hijack the http connection here. We have the stream now
 	rwc, br := clientconn.Hijack()
 	defer rwc.Close()
 
@@ -71,6 +72,7 @@ func (c *Client) Connect(server string) error {
 	}
 	defer term.RestoreTerminal(c.terminalFd, oldState)
 
+	// whatever data is sent through the socket, we want to display it
 	receiveStdout := Go(func() (err error) {
 		defer func() {
 			if in != nil {
@@ -84,23 +86,18 @@ func (c *Client) Connect(server string) error {
 			c.connected = true
 		}
 		_, err = io.Copy(stdout, br)
-		Debugf("[hijack] End of stdout")
 		return err
 	})
 
+	// whatever we type into the terminal, it will be sent through the socket
 	go func() {
 		if in != nil {
 			io.Copy(rwc, in)
-			Debugf("[hijack] End of stdin")
 		}
 		if tcpc, ok := rwc.(*net.TCPConn); ok {
-			if err := tcpc.CloseWrite(); err != nil {
-				Debugf("Couldn't send EOF: %s\n", err)
-			}
+			tcpc.CloseWrite()
 		} else if unixc, ok := rwc.(*net.UnixConn); ok {
-			if err := unixc.CloseWrite(); err != nil {
-				Debugf("Couldn't send EOF: %s\n", err)
-			}
+			unixc.CloseWrite()
 		}
 	}()
 
@@ -123,7 +120,7 @@ func (c *Client) postResize() error {
 
 	dial, err := net.Dial("unix", c.server)
 	if err != nil {
-		panic("Can't connect to gomux daemon")
+		return fmt.Errorf("Can't connect to gomux daemon %v", c.server)
 	}
 	defer dial.Close()
 	clientconn := httputil.NewClientConn(dial, nil)
@@ -132,6 +129,7 @@ func (c *Client) postResize() error {
 	return err
 }
 
+// monitor size of the current client and post the change to server
 func (c *Client) monitorSize() error {
 	c.postResize()
 	sigchan := make(chan os.Signal, 1)
@@ -144,10 +142,12 @@ func (c *Client) monitorSize() error {
 	return nil
 }
 
+// get current size of the client terminal
 func (c *Client) getSize() (int, int) {
 	ws, err := GetWinsize(c.terminalFd)
 	if err != nil {
-		panic(fmt.Sprintf("Error getting size: %s", err))
+		// just use 80, 24 as the default
+		return 80, 24
 	}
 	return int(ws.ws_row), int(ws.ws_col)
 }

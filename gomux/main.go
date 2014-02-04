@@ -44,6 +44,11 @@ func main() {
 			return
 		}
 		client := gomux.NewClient(os.Stdin, os.Stdout, sessionId)
-		client.Connect(SERVER)
+		err = client.Connect(SERVER)
+		if err != nil {
+			os.Exit(1)
+		} else {
+			os.Exit(0)
+		}
 	}
 }

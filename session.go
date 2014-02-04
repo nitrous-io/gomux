@@ -30,7 +30,7 @@ func NewSession() *Session {
 		buf: bytes.NewBuffer(nil)}
 	s.Pty, err = pty.Start(exec.Command("bash"))
 	if err != nil {
-		panic("should not failed")
+		panic("failed to create the session")
 	}
 	// session acts as the broadcaster so we copy output from pty directly to
 	// the session
@@ -38,6 +38,13 @@ func NewSession() *Session {
 		io.Copy(s, s.Pty)
 	}()
 	return s
+}
+
+func (s *Session) Close() {
+	for w, _ := range s.writers {
+		w.Close()
+	}
+	s.Pty.Close()
 }
 
 func (s *Session) Resize(w, h int) error {
@@ -65,16 +72,6 @@ func (s *Session) Write(p []byte) (n int, err error) {
 		}
 	}
 	return len(p), nil
-}
-
-func (s *Session) CloseWriters() error {
-	s.Lock()
-	defer s.Unlock()
-	for w := range s.writers {
-		w.Close()
-	}
-	s.writers = make(map[io.WriteCloser]bool)
-	return nil
 }
 
 func (s *Session) Attach(stdin io.ReadCloser, stdout io.Writer) chan error {

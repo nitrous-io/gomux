@@ -5,7 +5,10 @@ import (
 	"io"
 	"net"
 	"net/http"
+	"os"
+	"os/signal"
 	"strconv"
+	"syscall"
 
 	"github.com/gorilla/mux"
 )
@@ -29,6 +32,12 @@ func (m *Mux) Connect(i int) *Session {
 	return s
 }
 
+func (m *Mux) Close() {
+	for _, s := range m.Sessions {
+		s.Close()
+	}
+}
+
 func (m *Mux) ListenAndServe() error {
 	router := m.router()
 	l, e := net.Listen("unix", m.server)
@@ -36,6 +45,16 @@ func (m *Mux) ListenAndServe() error {
 		panic("could not listen to " + m.server)
 	}
 	httpServer := http.Server{Addr: m.server, Handler: router}
+	// catch signals and cleanup
+	c := make(chan os.Signal, 1)
+	signal.Notify(c, os.Interrupt, syscall.SIGTERM, syscall.SIGQUIT)
+	go func() {
+		sig := <-c
+		Debugf("Received signal '%v', exiting\n", sig)
+		os.RemoveAll(m.server)
+		m.Close()
+		os.Exit(0)
+	}()
 	Debugln("Starting gomux server at " + m.server)
 	return httpServer.Serve(l)
 }
