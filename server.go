@@ -19,6 +19,7 @@ func NewMux() *Mux {
 }
 
 func (m *Mux) Connect(i int) *Session {
+	Debugln("connect", i)
 	s, ok := m.Sessions[i]
 	if ok {
 		return s
@@ -36,6 +37,17 @@ func (m *Mux) ListenAndServe() error {
 	}
 	httpServer := http.Server{Addr: SERVER, Handler: router}
 	return httpServer.Serve(l)
+}
+
+func (m *Mux) postResizeHandler(w http.ResponseWriter, r *http.Request) {
+	params := mux.Vars(r)
+	sessionId, _ := strconv.Atoi(params["id"])
+	width, _ := strconv.Atoi(r.PostFormValue("w"))
+	height, _ := strconv.Atoi(r.PostFormValue("h"))
+	session := m.Connect(sessionId)
+	err := session.Resize(width, height)
+	Debugln(sessionId, width, height, session, err)
+	w.WriteHeader(http.StatusNoContent)
 }
 
 func (m *Mux) postSessionHandler(w http.ResponseWriter, r *http.Request) {
@@ -74,15 +86,16 @@ func (m *Mux) postSessionHandler(w http.ResponseWriter, r *http.Request) {
 		// do cleanup here for session
 	}()
 
-	fmt.Fprintf(stdout, "HTTP/1.1 200 OK\r\nContent-Type: application/vnd.gomux.raw-stream\r\n\r\n")
 	// create or get the session attached with session id
 	session := m.Connect(sessionId)
+	fmt.Fprintf(stdout, "HTTP/1.1 200 OK\r\nContent-Type: application/vnd.gomux.raw-stream\r\n\r\n")
 	<-session.Attach(stdin, stdout)
 }
 
 func (m *Mux) router() *mux.Router {
 	r := mux.NewRouter()
 	r.HandleFunc("/session/{id:.*}", m.postSessionHandler).Methods("POST")
+	r.HandleFunc("/session/{id:.*}/resize", m.postResizeHandler).Methods("PUT")
 	return r
 }
 
