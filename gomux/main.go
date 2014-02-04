@@ -17,6 +17,8 @@ using "gomux attach session_id"
 - gomux: start gomux server
 - gomux attach 1: attach to session 1`
 
+const SERVER = "/tmp/gomux.sock"
+
 func main() {
 	flHelp := flag.Bool("h", false, "print help text")
 	flag.Parse()
@@ -26,8 +28,15 @@ func main() {
 		return
 	}
 	args := flag.Args()
-	switch args[0] {
-	case "attach":
+	if len(args) == 0 {
+		_, err := os.Stat(SERVER)
+		if err == nil {
+			fmt.Printf("%s exists. Removing it...\n", SERVER)
+			os.RemoveAll(SERVER)
+		}
+		m := gomux.NewMux(SERVER)
+		m.ListenAndServe()
+	} else if args[0] == "attach" {
 		sessionId, err := strconv.Atoi(args[1])
 		if err != nil {
 			fmt.Println("Invalid session id: ", args[1])
@@ -35,9 +44,6 @@ func main() {
 			return
 		}
 		client := gomux.NewClient(os.Stdin, os.Stdout, sessionId)
-		client.Connect()
-	default:
-		m := gomux.NewMux()
-		m.ListenAndServe()
+		client.Connect(SERVER)
 	}
 }

@@ -16,8 +16,6 @@ import (
 	"github.com/dotcloud/docker/pkg/term"
 )
 
-const SERVER = "/tmp/gomux.sock"
-
 type Client struct {
 	in         io.ReadCloser
 	out        io.Writer
@@ -25,6 +23,7 @@ type Client struct {
 	conn       net.Conn
 	terminalFd uintptr
 	connected  bool
+	server     string
 }
 
 func NewClient(in io.ReadCloser, out io.Writer, sessionId int) *Client {
@@ -40,18 +39,19 @@ func NewClient(in io.ReadCloser, out io.Writer, sessionId int) *Client {
 	}
 }
 
-func (c *Client) Connect() error {
+func (c *Client) Connect(server string) error {
 	in := c.in
 	stdout := c.out
+	c.server = server
 
 	req, err := http.NewRequest("POST", fmt.Sprintf("/session/%d", c.sessionId), nil)
 	if err != nil {
 		return err
 	}
 	req.Header.Set("Content-Type", "plain/text")
-	req.Host = SERVER
+	req.Host = server
 
-	dial, err := net.Dial("unix", SERVER)
+	dial, err := net.Dial("unix", server)
 	if err != nil {
 		panic("Can't connect to gomux daemon")
 	}
@@ -119,9 +119,9 @@ func (c *Client) postResize() error {
 		return err
 	}
 	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
-	req.Host = SERVER
+	req.Host = c.server
 
-	dial, err := net.Dial("unix", SERVER)
+	dial, err := net.Dial("unix", c.server)
 	if err != nil {
 		panic("Can't connect to gomux daemon")
 	}

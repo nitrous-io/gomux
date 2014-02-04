@@ -12,14 +12,14 @@ import (
 
 type Mux struct {
 	Sessions map[int]*Session
+	server   string
 }
 
-func NewMux() *Mux {
-	return &Mux{Sessions: make(map[int]*Session)}
+func NewMux(server string) *Mux {
+	return &Mux{Sessions: make(map[int]*Session), server: server}
 }
 
 func (m *Mux) Connect(i int) *Session {
-	Debugln("connect", i)
 	s, ok := m.Sessions[i]
 	if ok {
 		return s
@@ -31,11 +31,12 @@ func (m *Mux) Connect(i int) *Session {
 
 func (m *Mux) ListenAndServe() error {
 	router := m.router()
-	l, e := net.Listen("unix", SERVER)
+	l, e := net.Listen("unix", m.server)
 	if e != nil {
-		panic("could not listen to " + SERVER)
+		panic("could not listen to " + m.server)
 	}
-	httpServer := http.Server{Addr: SERVER, Handler: router}
+	httpServer := http.Server{Addr: m.server, Handler: router}
+	Debugln("Starting gomux server at " + m.server)
 	return httpServer.Serve(l)
 }
 
@@ -45,8 +46,7 @@ func (m *Mux) postResizeHandler(w http.ResponseWriter, r *http.Request) {
 	width, _ := strconv.Atoi(r.PostFormValue("w"))
 	height, _ := strconv.Atoi(r.PostFormValue("h"))
 	session := m.Connect(sessionId)
-	err := session.Resize(width, height)
-	Debugln(sessionId, width, height, session, err)
+	session.Resize(width, height)
 	w.WriteHeader(http.StatusNoContent)
 }
 
