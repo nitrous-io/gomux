@@ -15,9 +15,7 @@ import (
 
 type Session struct {
 	sync.Mutex
-	Width  int
-	Height int
-	Pty    *os.File
+	Pty *os.File
 
 	NumConn int
 	buf     *bytes.Buffer
@@ -25,9 +23,19 @@ type Session struct {
 }
 
 func NewSession() *Session {
+	s := &Session{}
+	s.MaybeRecreate()
+	return s
+}
+
+func (s *Session) MaybeRecreate() {
+	Debugln("num conn", s.NumConn)
+	if s.NumConn > 0 {
+		return
+	}
 	var err error
-	s := &Session{writers: make(map[io.WriteCloser]bool),
-		buf: bytes.NewBuffer(nil)}
+	s.writers = make(map[io.WriteCloser]bool)
+	s.buf = bytes.NewBuffer(nil)
 	s.Pty, err = pty.Start(exec.Command("bash"))
 	if err != nil {
 		panic("failed to create the session")
@@ -37,13 +45,14 @@ func NewSession() *Session {
 	go func() {
 		io.Copy(s, s.Pty)
 	}()
-	return s
 }
 
 func (s *Session) Close() {
 	for w, _ := range s.writers {
 		w.Close()
 	}
+	s.writers = make(map[io.WriteCloser]bool)
+	s.buf = bytes.NewBuffer(nil)
 	s.Pty.Close()
 }
 
@@ -75,10 +84,17 @@ func (s *Session) Write(p []byte) (n int, err error) {
 }
 
 func (s *Session) Attach(stdin io.ReadCloser, stdout io.Writer) chan error {
-	s.NumConn += 1
 	errors := make(chan error, 2)
 	// stdin
 	go func() {
+		defer func() {
+			s.NumConn -= 1
+			// if there isnt anymore connection, probably we should just close
+			if s.NumConn == 0 {
+				s.Close()
+			}
+		}()
+		s.NumConn += 1
 		_, err := CopyEscapable(s.Pty, stdin)
 		if err == io.ErrClosedPipe {
 			err = nil

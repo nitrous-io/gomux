@@ -25,6 +25,7 @@ func NewMux(server string) *Mux {
 func (m *Mux) Connect(i int) *Session {
 	s, ok := m.Sessions[i]
 	if ok {
+		s.MaybeRecreate()
 		return s
 	}
 	s = NewSession()
@@ -103,6 +104,7 @@ func (m *Mux) postSessionHandler(w http.ResponseWriter, r *http.Request) {
 
 	defer func() {
 		// do cleanup here for session
+		fmt.Println("closed")
 	}()
 
 	// create or get the session attached with session id

@@ -75,10 +75,8 @@ func (c *Client) Connect(server string) error {
 	// whatever data is sent through the socket, we want to display it
 	receiveStdout := Go(func() (err error) {
 		defer func() {
-			if in != nil {
-				term.RestoreTerminal(c.terminalFd, oldState)
-				in.Close()
-			}
+			term.RestoreTerminal(c.terminalFd, oldState)
+			in.Close()
 		}()
 		// if this is first time we connect, do some more setup here
 		if !c.connected {
@@ -91,14 +89,7 @@ func (c *Client) Connect(server string) error {
 
 	// whatever we type into the terminal, it will be sent through the socket
 	go func() {
-		if in != nil {
-			io.Copy(rwc, in)
-		}
-		if tcpc, ok := rwc.(*net.TCPConn); ok {
-			tcpc.CloseWrite()
-		} else if unixc, ok := rwc.(*net.UnixConn); ok {
-			unixc.CloseWrite()
-		}
+		io.Copy(rwc, in)
 	}()
 
 	return <-receiveStdout
