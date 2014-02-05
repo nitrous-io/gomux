@@ -20,6 +20,8 @@ type Session struct {
 	NumConn int
 	buf     *bytes.Buffer
 	writers map[io.WriteCloser]bool
+	width   int
+	height  int
 }
 
 func NewSession() *Session {
@@ -29,7 +31,6 @@ func NewSession() *Session {
 }
 
 func (s *Session) MaybeRecreate() {
-	Debugln("num conn", s.NumConn)
 	if s.NumConn > 0 {
 		return
 	}
@@ -57,8 +58,14 @@ func (s *Session) Close() {
 }
 
 func (s *Session) Resize(w, h int) error {
+	if s.width == 0 || s.width > w {
+		s.width = w
+	}
+	if s.height == 0 || s.height > h {
+		s.height = h
+	}
 	return SetWinsize(s.Pty.Fd(),
-		&Winsize{ws_row: uint16(w), ws_col: uint16(h)})
+		&Winsize{ws_row: uint16(s.width), ws_col: uint16(s.height)})
 }
 
 func (s *Session) StdoutPipe() (io.ReadCloser, error) {
