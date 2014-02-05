@@ -63,10 +63,11 @@ func (m *Mux) ListenAndServe() error {
 func (m *Mux) postResizeHandler(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
 	sessionId, _ := strconv.Atoi(params["id"])
+	id := r.PostFormValue("id")
 	width, _ := strconv.Atoi(r.PostFormValue("w"))
 	height, _ := strconv.Atoi(r.PostFormValue("h"))
 	session := m.Connect(sessionId)
-	session.Resize(width, height)
+	session.Resize(id, width, height)
 	w.WriteHeader(http.StatusNoContent)
 }
 

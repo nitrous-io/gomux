@@ -20,8 +20,7 @@ type Session struct {
 	NumConn int
 	buf     *bytes.Buffer
 	writers map[io.WriteCloser]bool
-	width   int
-	height  int
+	sizes   map[string]*Winsize
 }
 
 func NewSession() *Session {
@@ -35,6 +34,7 @@ func (s *Session) MaybeRecreate() {
 		return
 	}
 	var err error
+	s.sizes = make(map[string]*Winsize)
 	s.writers = make(map[io.WriteCloser]bool)
 	s.buf = bytes.NewBuffer(nil)
 	s.Pty, err = pty.Start(exec.Command("bash"))
@@ -57,15 +57,27 @@ func (s *Session) Close() {
 	s.Pty.Close()
 }
 
-func (s *Session) Resize(w, h int) error {
-	if s.width == 0 || s.width > w {
-		s.width = w
+func (s *Session) Resize(id string, w, h int) error {
+	// save the new size for the client
+	ws, ok := s.sizes[id]
+	if !ok {
+		ws = &Winsize{Width: uint16(w), Height: uint16(h)}
+		s.sizes[id] = ws
+	} else {
+		ws.Width = uint16(w)
+		ws.Height = uint16(h)
 	}
-	if s.height == 0 || s.height > h {
-		s.height = h
+	// find smallest width and height in all winsizes
+	var minw, minh uint16
+	for _, ws := range s.sizes {
+		if minw == 0 || minw > ws.Width {
+			minw = ws.Width
+		}
+		if minh == 0 || minh > ws.Height {
+			minh = ws.Height
+		}
 	}
-	return SetWinsize(s.Pty.Fd(),
-		&Winsize{ws_row: uint16(s.width), ws_col: uint16(s.height)})
+	return SetWinsize(s.Pty.Fd(), &Winsize{Width: minw, Height: minh})
 }
 
 func (s *Session) StdoutPipe() (io.ReadCloser, error) {
@@ -132,10 +144,10 @@ func (s *Session) Attach(stdin io.ReadCloser, stdout io.Writer) chan error {
 }
 
 type Winsize struct {
-	ws_row    uint16
-	ws_col    uint16
-	ws_xpixel uint16
-	ws_ypixel uint16
+	Height uint16
+	Width  uint16
+	x      uint16
+	y      uint16
 }
 
 func GetWinsize(fd uintptr) (*Winsize, error) {

@@ -1,6 +1,8 @@
 package gomux
 
 import (
+	"crypto/rand"
+	"encoding/hex"
 	"io"
 )
 
@@ -55,4 +57,13 @@ func CopyEscapable(dst io.Writer, src io.ReadCloser) (written int64, err error) 
 		}
 	}
 	return written, err
+}
+
+func RandomString() string {
+	id := make([]byte, 32)
+	_, err := io.ReadFull(rand.Reader, id)
+	if err != nil {
+		panic(err)
+	}
+	return hex.EncodeToString(id)
 }

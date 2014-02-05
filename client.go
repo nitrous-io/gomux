@@ -17,6 +17,7 @@ import (
 )
 
 type Client struct {
+	id         string
 	in         io.ReadCloser
 	out        io.Writer
 	sessionId  int
@@ -32,6 +33,7 @@ func NewClient(in io.ReadCloser, out io.Writer, sessionId int) *Client {
 		panic("require in to be *os.File")
 	}
 	return &Client{
+		id:         RandomString(),
 		in:         in,
 		out:        out,
 		sessionId:  sessionId,
@@ -100,6 +102,7 @@ func (c *Client) postResize() error {
 	values := make(url.Values)
 	values.Set("w", strconv.Itoa(w))
 	values.Set("h", strconv.Itoa(h))
+	values.Set("id", c.id)
 	req, err := http.NewRequest("PUT",
 		fmt.Sprintf("/session/%d/resize", c.sessionId),
 		bytes.NewBufferString(values.Encode()))
@@ -140,5 +143,5 @@ func (c *Client) getSize() (int, int) {
 		// just use 80, 24 as the default
 		return 80, 24
 	}
-	return int(ws.ws_row), int(ws.ws_col)
+	return int(ws.Width), int(ws.Height)
 }
