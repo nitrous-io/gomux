@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"flag"
 	"fmt"
 	"github.com/action-io/gomux"
@@ -31,7 +32,13 @@ func main() {
 	if len(args) == 0 {
 		_, err := os.Stat(SERVER)
 		if err == nil {
-			fmt.Printf("%s exists. Removing it...\n", SERVER)
+			info, err := gomux.GetInfo(SERVER)
+			if err == nil {
+				encoder := json.NewEncoder(os.Stdout)
+				encoder.Encode(info)
+				os.Exit(0)
+			}
+			fmt.Printf("%s is not running. Removing sock...\n", SERVER)
 			os.RemoveAll(SERVER)
 		}
 		m := gomux.NewMux(SERVER)

@@ -2,6 +2,7 @@ package gomux
 
 import (
 	"bytes"
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -12,6 +13,7 @@ import (
 	"os/signal"
 	"strconv"
 	"syscall"
+	"time"
 
 	"github.com/dotcloud/docker/pkg/term"
 )
@@ -144,4 +146,34 @@ func (c *Client) getSize() (int, int) {
 		return 80, 24
 	}
 	return int(ws.Width), int(ws.Height)
+}
+
+var ErrServerTimeout = fmt.Errorf("Can't connect to gomux daemon")
+
+func GetInfo(server string) (*Info, error) {
+	req, err := http.NewRequest("GET", "/info", nil)
+	if err != nil {
+		return nil, err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Host = server
+
+	dial, err := net.DialTimeout("unix", server, 50*time.Millisecond)
+	if err != nil {
+		return nil, ErrServerTimeout
+	}
+	defer dial.Close()
+	clientconn := httputil.NewClientConn(dial, nil)
+	defer clientconn.Close()
+	response, err := clientconn.Do(req)
+	defer response.Body.Close()
+	info := &Info{}
+	if response.StatusCode == http.StatusOK {
+		decoder := json.NewDecoder(response.Body)
+		err = decoder.Decode(info)
+		return info, err
+	} else {
+		err = fmt.Errorf("Failed to get info")
+		return nil, err
+	}
 }

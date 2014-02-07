@@ -1,6 +1,7 @@
 package gomux
 
 import (
+	"encoding/json"
 	"fmt"
 	"io"
 	"net"
@@ -16,6 +17,14 @@ import (
 type Mux struct {
 	Sessions map[int]*Session
 	server   string
+}
+
+type Info struct {
+	ActiveSessions []int `json:"activeSessions"`
+}
+
+func (i Info) String() string {
+	return fmt.Sprintf("%s", i.ActiveSessions)
 }
 
 func NewMux(server string) *Mux {
@@ -114,8 +123,23 @@ func (m *Mux) postSessionHandler(w http.ResponseWriter, r *http.Request) {
 	<-session.Attach(stdin, stdout)
 }
 
+func (m *Mux) getInfoHandler(w http.ResponseWriter, r *http.Request) {
+	activeSessions := []int{}
+	for sessionId, _ := range m.Sessions {
+		activeSessions = append(activeSessions, sessionId)
+	}
+	info, err := json.Marshal(Info{ActiveSessions: activeSessions})
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		w.Write([]byte("failed to get info of gomux server"))
+		return
+	}
+	w.Write(info)
+}
+
 func (m *Mux) router() *mux.Router {
 	r := mux.NewRouter()
+	r.HandleFunc("/info", m.getInfoHandler).Methods("GET")
 	r.HandleFunc("/session/{id:.*}", m.postSessionHandler).Methods("POST")
 	r.HandleFunc("/session/{id:.*}/resize", m.postResizeHandler).Methods("PUT")
 	return r
