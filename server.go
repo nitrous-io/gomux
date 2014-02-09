@@ -17,18 +17,15 @@ import (
 type Mux struct {
 	Sessions map[int]*Session
 	server   string
-}
-
-type Info struct {
-	ActiveSessions []int `json:"activeSessions"`
-}
-
-func (i Info) String() string {
-	return fmt.Sprintf("%s", i.ActiveSessions)
+	events   chan Message
 }
 
 func NewMux(server string) *Mux {
-	return &Mux{Sessions: make(map[int]*Session), server: server}
+	return &Mux{
+		Sessions: make(map[int]*Session),
+		server:   server,
+		events:   make(chan Message, 1),
+	}
 }
 
 func (m *Mux) Connect(i int) *Session {
@@ -77,6 +74,14 @@ func (m *Mux) postResizeHandler(w http.ResponseWriter, r *http.Request) {
 	height, _ := strconv.Atoi(r.PostFormValue("h"))
 	session := m.Connect(sessionId)
 	session.Resize(id, width, height)
+	// broadcast this event
+	ws := session.Winsize()
+	m.events <- Message{
+		Event:     "resize",
+		SessionId: sessionId,
+		Width:     int(ws.Width),
+		Height:    int(ws.Height),
+	}
 	w.WriteHeader(http.StatusNoContent)
 }
 
@@ -137,9 +142,41 @@ func (m *Mux) getInfoHandler(w http.ResponseWriter, r *http.Request) {
 	w.Write(info)
 }
 
+// emits events to the listener, this can be implemented by clients to create
+// new terminals / resize existing terminals etc
+func (m *Mux) getEventsHandler(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	flusher := w.(http.Flusher)
+	// flush the message down http.ResponseWriter
+	flush := func(b []byte) error {
+		_, err := w.Write(b)
+		flusher.Flush()
+		return err
+	}
+	// send the event to http.ResponseWriter
+	sendEvent := func(event *Message) error {
+		b, err := json.Marshal(event)
+		if err != nil {
+			return fmt.Errorf("JSON error")
+		}
+		flush(b)
+		return err
+	}
+	flush(nil)
+	for event := range m.events {
+		err := sendEvent(&event)
+		if err != nil {
+			w.WriteHeader(http.StatusInternalServerError)
+			return
+		}
+	}
+	w.WriteHeader(http.StatusOK)
+}
+
 func (m *Mux) router() *mux.Router {
 	r := mux.NewRouter()
 	r.HandleFunc("/info", m.getInfoHandler).Methods("GET")
+	r.HandleFunc("/events", m.getEventsHandler).Methods("GET")
 	r.HandleFunc("/session/{id:.*}", m.postSessionHandler).Methods("POST")
 	r.HandleFunc("/session/{id:.*}/resize", m.postResizeHandler).Methods("PUT")
 	return r

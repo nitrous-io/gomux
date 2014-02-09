@@ -57,5 +57,12 @@ func main() {
 		} else {
 			os.Exit(0)
 		}
+	} else if args[0] == "events" {
+		err := gomux.GetEvents(SERVER)
+		if err != nil {
+			os.Exit(1)
+		} else {
+			os.Exit(0)
+		}
 	}
 }
