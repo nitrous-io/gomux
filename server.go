@@ -125,6 +125,10 @@ func (m *Mux) postSessionHandler(w http.ResponseWriter, r *http.Request) {
 	// create or get the session attached with session id
 	session := m.Connect(sessionId)
 	fmt.Fprintf(stdout, "HTTP/1.1 200 OK\r\nContent-Type: application/vnd.gomux.raw-stream\r\n\r\n")
+	m.events <- Message{
+		Event:     "new_client",
+		SessionId: sessionId,
+	}
 	<-session.Attach(stdin, stdout)
 }
 
