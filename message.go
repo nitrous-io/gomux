@@ -15,6 +15,6 @@ func (i Info) String() string {
 type Message struct {
 	Event     string `json:"event"`
 	SessionId int    `json:"sessionId"`
-	Width     int    `json:"width"`
-	Height    int    `json:"height"`
+	Width     int    `json:"width,omitempty"`
+	Height    int    `json:"height,omitempty"`
 }
