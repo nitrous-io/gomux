@@ -45,3 +45,29 @@ func TestBroadcast(t *testing.T) {
 		}
 	}
 }
+
+func TestSessionResize(t *testing.T) {
+	var ws *Winsize
+	s := NewSession()
+	fd := s.fd()
+
+	s.Resize("1", 80, 24)
+	ws, _ = GetWinsize(fd)
+	if ws.Width != 80 || ws.Height != 24 {
+		t.Fail()
+	}
+
+	// keep the smallest size possible between all clients
+	s.Resize("2", 60, 40)
+	ws, _ = GetWinsize(fd)
+	if ws.Width != 60 || ws.Height != 24 {
+		t.Fail()
+	}
+
+	// keep the smallest size possible between all clients
+	s.Resize("1", 100, 60)
+	ws, _ = GetWinsize(fd)
+	if ws.Width != 60 || ws.Height != 40 {
+		t.Fail()
+	}
+}
