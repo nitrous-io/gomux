@@ -31,14 +31,10 @@ func (s *Session) MaybeRecreate() {
 	if s.NumConn > 0 {
 		return
 	}
-	var err error
 	s.sizes = make(map[string]*Winsize)
 	s.writers = make(map[io.WriteCloser]bool)
 	s.buf = bytes.NewBuffer(nil)
-	s.Pty, err = pty.Start(exec.Command("bash"))
-	if err != nil {
-		panic("failed to create the session")
-	}
+	s.Pty = createPty(exec.Command("bash"))
 	// session acts as the broadcaster so we copy output from pty directly to
 	// the session
 	go func() {
@@ -139,4 +135,13 @@ func (s *Session) Attach(stdin io.ReadCloser, stdout io.Writer) chan error {
 		}
 		return nil
 	})
+}
+
+// if we cant create the pty, just panic
+func createPty(cmd *exec.Cmd) *os.File {
+	p, err := pty.Start(cmd)
+	if err != nil {
+		panic("failed to create new pty")
+	}
+	return p
 }
