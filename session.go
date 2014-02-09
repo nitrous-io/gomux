@@ -6,8 +6,6 @@ import (
 	"os"
 	"os/exec"
 	"sync"
-	"syscall"
-	"unsafe"
 
 	du "github.com/dotcloud/docker/utils"
 	"github.com/kr/pty"
@@ -114,7 +112,7 @@ func (s *Session) Attach(stdin io.ReadCloser, stdout io.Writer) chan error {
 			}
 		}()
 		s.NumConn += 1
-		_, err := CopyEscapable(s.Pty, stdin)
+		_, err := io.Copy(s.Pty, stdin)
 		if err == io.ErrClosedPipe {
 			err = nil
 		}
@@ -141,30 +139,4 @@ func (s *Session) Attach(stdin io.ReadCloser, stdout io.Writer) chan error {
 		}
 		return nil
 	})
-}
-
-type Winsize struct {
-	Height uint16
-	Width  uint16
-	x      uint16
-	y      uint16
-}
-
-func GetWinsize(fd uintptr) (*Winsize, error) {
-	ws := &Winsize{}
-	_, _, err := syscall.Syscall(syscall.SYS_IOCTL, fd,
-		uintptr(syscall.TIOCGWINSZ), uintptr(unsafe.Pointer(ws)))
-	if err == 0 {
-		return ws, nil
-	}
-	return ws, err
-}
-
-func SetWinsize(fd uintptr, ws *Winsize) error {
-	_, _, err := syscall.Syscall(syscall.SYS_IOCTL, fd,
-		uintptr(syscall.TIOCSWINSZ), uintptr(unsafe.Pointer(ws)))
-	if err == 0 {
-		return nil
-	}
-	return err
 }
