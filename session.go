@@ -132,6 +132,11 @@ func (s *Session) Attach(stdin io.ReadCloser, stdout io.Writer) chan error {
 	})
 }
 
+func (s *Session) Winsize() *Winsize {
+	ws, _ := GetWinsize(s.fd())
+	return ws
+}
+
 func (s *Session) fd() uintptr {
 	p := s.Pty.(*os.File)
 	return p.Fd()

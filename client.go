@@ -177,3 +177,27 @@ func GetInfo(server string) (*Info, error) {
 		return nil, err
 	}
 }
+
+func GetEvents(server string) error {
+	req, err := http.NewRequest("GET", "/events", nil)
+	if err != nil {
+		return err
+	}
+	req.Header.Set("Content-Type", "application/json")
+	req.Host = server
+
+	dial, err := net.DialTimeout("unix", server, 50*time.Millisecond)
+	if err != nil {
+		return ErrServerTimeout
+	}
+	defer dial.Close()
+	clientconn := httputil.NewClientConn(dial, nil)
+	defer clientconn.Close()
+	resp, err := clientconn.Do(req)
+	if err != nil {
+		return err
+	}
+	defer resp.Body.Close()
+	io.Copy(os.Stdout, resp.Body)
+	return err
+}
