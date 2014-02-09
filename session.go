@@ -1,7 +1,6 @@
 package gomux
 
 import (
-	"bytes"
 	"io"
 	"os"
 	"os/exec"
@@ -13,10 +12,8 @@ import (
 
 type Session struct {
 	sync.Mutex
-	Pty *os.File
-
+	Pty     io.ReadWriter
 	NumConn int
-	buf     *bytes.Buffer
 	writers map[io.WriteCloser]bool
 	sizes   map[string]*Winsize
 }
@@ -33,7 +30,6 @@ func (s *Session) MaybeRecreate() {
 	}
 	s.sizes = make(map[string]*Winsize)
 	s.writers = make(map[io.WriteCloser]bool)
-	s.buf = bytes.NewBuffer(nil)
 	s.Pty = createPty(exec.Command("bash"))
 	// session acts as the broadcaster so we copy output from pty directly to
 	// the session
@@ -47,8 +43,8 @@ func (s *Session) Close() {
 		w.Close()
 	}
 	s.writers = make(map[io.WriteCloser]bool)
-	s.buf = bytes.NewBuffer(nil)
-	s.Pty.Close()
+	p := s.Pty.(*os.File)
+	p.Close()
 }
 
 func (s *Session) Resize(id string, w, h int) error {
@@ -71,7 +67,7 @@ func (s *Session) Resize(id string, w, h int) error {
 			minh = ws.Height
 		}
 	}
-	return SetWinsize(s.Pty.Fd(), &Winsize{Width: minw, Height: minh})
+	return SetWinsize(s.fd(), &Winsize{Width: minw, Height: minh})
 }
 
 func (s *Session) StdoutPipe() (io.ReadCloser, error) {
@@ -85,7 +81,6 @@ func (s *Session) StdoutPipe() (io.ReadCloser, error) {
 func (s *Session) Write(p []byte) (n int, err error) {
 	s.Lock()
 	defer s.Unlock()
-	s.buf.Write(p)
 	for w := range s.writers {
 		lp := p
 		if n, err := w.Write(lp); err != nil || n != len(lp) {
@@ -135,6 +130,11 @@ func (s *Session) Attach(stdin io.ReadCloser, stdout io.Writer) chan error {
 		}
 		return nil
 	})
+}
+
+func (s *Session) fd() uintptr {
+	p := s.Pty.(*os.File)
+	return p.Fd()
 }
 
 // if we cant create the pty, just panic
