@@ -35,7 +35,7 @@ func (m *Mux) Connect(i string) *Session {
 		s.MaybeRecreate()
 		return s
 	}
-	s = NewSession()
+	s = NewSession(len(m.Sessions))
 	m.Sessions[i] = s
 	return s
 }
@@ -129,8 +129,9 @@ func (m *Mux) postSessionHandler(w http.ResponseWriter, r *http.Request) {
 	session := m.Connect(sessionId)
 	fmt.Fprintf(stdout, "HTTP/1.1 200 OK\r\nContent-Type: application/vnd.gomux.raw-stream\r\n\r\n")
 	m.events <- Message{
-		Event:     "new_client",
-		SessionId: sessionId,
+		Event:           "new_client",
+		SessionId:       sessionId,
+		SessionServerId: session.ServerId,
 	}
 	<-session.Attach(stdin, stdout)
 }

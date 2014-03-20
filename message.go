@@ -17,4 +17,7 @@ type Message struct {
 	SessionId string `json:"sessionId"`
 	Width     int    `json:"width,omitempty"`
 	Height    int    `json:"height,omitempty"`
+
+	// server sequentially generated id instead of user generated id
+	SessionServerId int `json:"sessionServerId"`
 }

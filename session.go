@@ -12,14 +12,15 @@ import (
 
 type Session struct {
 	sync.Mutex
-	Pty     io.ReadWriter
-	NumConn int
-	writers map[io.WriteCloser]bool
-	sizes   map[string]*Winsize
+	ServerId int // easy id for a session instead of user-generated id
+	Pty      io.ReadWriter
+	NumConn  int
+	writers  map[io.WriteCloser]bool
+	sizes    map[string]*Winsize
 }
 
-func NewSession() *Session {
-	s := &Session{}
+func NewSession(id int) *Session {
+	s := &Session{ServerId: id}
 	s.MaybeRecreate()
 	return s
 }
