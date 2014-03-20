@@ -133,7 +133,18 @@ func (m *Mux) postSessionHandler(w http.ResponseWriter, r *http.Request) {
 		SessionId:       sessionId,
 		SessionServerId: session.ServerId,
 	}
+
 	<-session.Attach(stdin, stdout)
+
+	// if there isnt any more connections to this session, just broadcast that
+	// the session is closed
+	if session.NumConn == 0 {
+		m.events <- Message{
+			Event:           "session_close",
+			SessionId:       sessionId,
+			SessionServerId: session.ServerId,
+		}
+	}
 }
 
 func (m *Mux) getInfoHandler(w http.ResponseWriter, r *http.Request) {
