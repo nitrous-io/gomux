@@ -122,6 +122,8 @@ func (s *Session) Attach(stdin io.ReadCloser, stdout io.Writer) chan error {
 			errors <- err
 		}
 	}()
+	// force re-draw
+	s.Redraw()
 	return Go(func() error {
 		for i := 0; i < 2; i += 1 {
 			if err := <-errors; err != nil {
@@ -135,6 +137,16 @@ func (s *Session) Attach(stdin io.ReadCloser, stdout io.Writer) chan error {
 func (s *Session) Winsize() *Winsize {
 	ws, _ := GetWinsize(s.fd())
 	return ws
+}
+
+// perform a resize to force-redraw of the session
+func (s *Session) Redraw() error {
+	ws, _ := GetWinsize(s.fd())
+	err := SetWinsize(s.fd(), &Winsize{Width: ws.Width, Height: ws.Height - 1})
+	if err != nil {
+		return err
+	}
+	return SetWinsize(s.fd(), &Winsize{Width: ws.Width, Height: ws.Height})
 }
 
 func (s *Session) fd() uintptr {
