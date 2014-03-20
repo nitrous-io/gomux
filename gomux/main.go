@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"github.com/action-io/gomux"
 	"os"
-	"strconv"
 )
 
 var help = `GOMUX: a pty multiplexer
@@ -44,14 +43,8 @@ func main() {
 		m := gomux.NewMux(SERVER)
 		m.ListenAndServe()
 	} else if args[0] == "attach" {
-		sessionId, err := strconv.Atoi(args[1])
-		if err != nil {
-			fmt.Println("Invalid session id: ", args[1])
-			os.Exit(1)
-			return
-		}
-		client := gomux.NewClient(os.Stdin, os.Stdout, sessionId)
-		err = client.Connect(SERVER)
+		client := gomux.NewClient(os.Stdin, os.Stdout, args[1])
+		err := client.Connect(SERVER)
 		if err != nil {
 			os.Exit(1)
 		} else {

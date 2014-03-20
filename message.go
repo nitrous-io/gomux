@@ -5,7 +5,7 @@ import (
 )
 
 type Info struct {
-	ActiveSessions []int `json:"activeSessions"`
+	ActiveSessions []string `json:"activeSessions"`
 }
 
 func (i Info) String() string {
@@ -14,7 +14,7 @@ func (i Info) String() string {
 
 type Message struct {
 	Event     string `json:"event"`
-	SessionId int    `json:"sessionId"`
+	SessionId string `json:"sessionId"`
 	Width     int    `json:"width,omitempty"`
 	Height    int    `json:"height,omitempty"`
 }

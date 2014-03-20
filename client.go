@@ -22,14 +22,14 @@ type Client struct {
 	id         string
 	in         io.ReadCloser
 	out        io.Writer
-	sessionId  int
+	sessionId  string
 	conn       net.Conn
 	terminalFd uintptr
 	connected  bool
 	server     string
 }
 
-func NewClient(in io.ReadCloser, out io.Writer, sessionId int) *Client {
+func NewClient(in io.ReadCloser, out io.Writer, sessionId string) *Client {
 	file, ok := in.(*os.File)
 	if !ok {
 		panic("require in to be *os.File")
@@ -48,7 +48,7 @@ func (c *Client) Connect(server string) error {
 	stdout := c.out
 	c.server = server
 
-	req, err := http.NewRequest("POST", fmt.Sprintf("/session/%d", c.sessionId), nil)
+	req, err := http.NewRequest("POST", fmt.Sprintf("/session/%s", c.sessionId), nil)
 	if err != nil {
 		return err
 	}
@@ -106,7 +106,7 @@ func (c *Client) postResize() error {
 	values.Set("h", strconv.Itoa(h))
 	values.Set("id", c.id)
 	req, err := http.NewRequest("PUT",
-		fmt.Sprintf("/session/%d/resize", c.sessionId),
+		fmt.Sprintf("/session/%s/resize", c.sessionId),
 		bytes.NewBufferString(values.Encode()))
 	if err != nil {
 		return err

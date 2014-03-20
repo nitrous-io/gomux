@@ -15,7 +15,7 @@ import (
 )
 
 type Mux struct {
-	Sessions       map[int]*Session
+	Sessions       map[string]*Session
 	server         string
 	events         chan Message
 	eventListeners []chan Message
@@ -23,13 +23,13 @@ type Mux struct {
 
 func NewMux(server string) *Mux {
 	return &Mux{
-		Sessions: make(map[int]*Session),
+		Sessions: make(map[string]*Session),
 		server:   server,
 		events:   make(chan Message, 1),
 	}
 }
 
-func (m *Mux) Connect(i int) *Session {
+func (m *Mux) Connect(i string) *Session {
 	s, ok := m.Sessions[i]
 	if ok {
 		s.MaybeRecreate()
@@ -71,7 +71,7 @@ func (m *Mux) ListenAndServe() error {
 
 func (m *Mux) postResizeHandler(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
-	sessionId, _ := strconv.Atoi(params["id"])
+	sessionId, _ := params["id"]
 	id := r.PostFormValue("id")
 	width, _ := strconv.Atoi(r.PostFormValue("w"))
 	height, _ := strconv.Atoi(r.PostFormValue("h"))
@@ -90,8 +90,8 @@ func (m *Mux) postResizeHandler(w http.ResponseWriter, r *http.Request) {
 
 func (m *Mux) postSessionHandler(w http.ResponseWriter, r *http.Request) {
 	params := mux.Vars(r)
-	sessionId, err := strconv.Atoi(params["id"])
-	if err != nil {
+	sessionId, ok := params["id"]
+	if !ok {
 		w.WriteHeader(http.StatusBadRequest)
 		w.Write([]byte("invalid session id"))
 		return
@@ -136,7 +136,7 @@ func (m *Mux) postSessionHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func (m *Mux) getInfoHandler(w http.ResponseWriter, r *http.Request) {
-	activeSessions := []int{}
+	activeSessions := []string{}
 	for sessionId, _ := range m.Sessions {
 		activeSessions = append(activeSessions, sessionId)
 	}
