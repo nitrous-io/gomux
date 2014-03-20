@@ -80,10 +80,11 @@ func (m *Mux) postResizeHandler(w http.ResponseWriter, r *http.Request) {
 	// broadcast this event
 	ws := session.Winsize()
 	m.events <- Message{
-		Event:     "resize",
-		SessionId: sessionId,
-		Width:     int(ws.Width),
-		Height:    int(ws.Height),
+		Event:           "resize",
+		SessionId:       sessionId,
+		SessionServerId: session.ServerId,
+		Width:           int(ws.Width),
+		Height:          int(ws.Height),
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
