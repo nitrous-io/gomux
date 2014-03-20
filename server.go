@@ -15,9 +15,10 @@ import (
 )
 
 type Mux struct {
-	Sessions map[int]*Session
-	server   string
-	events   chan Message
+	Sessions       map[int]*Session
+	server         string
+	events         chan Message
+	eventListeners []chan Message
 }
 
 func NewMux(server string) *Mux {
@@ -62,6 +63,8 @@ func (m *Mux) ListenAndServe() error {
 		m.Close()
 		os.Exit(0)
 	}()
+	// listen and broadcast all events
+	go m.listenAndBroadcastEvent()
 	Debugln("Starting gomux server at " + m.server)
 	return httpServer.Serve(l)
 }
@@ -150,6 +153,8 @@ func (m *Mux) getInfoHandler(w http.ResponseWriter, r *http.Request) {
 // new terminals / resize existing terminals etc
 func (m *Mux) getEventsHandler(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
+	eventListener := make(chan Message)
+	m.eventListeners = append(m.eventListeners, eventListener)
 	flusher := w.(http.Flusher)
 	// flush the message down http.ResponseWriter
 	flush := func(b []byte) error {
@@ -167,7 +172,7 @@ func (m *Mux) getEventsHandler(w http.ResponseWriter, r *http.Request) {
 		return err
 	}
 	flush(nil)
-	for event := range m.events {
+	for event := range eventListener {
 		err := sendEvent(&event)
 		if err != nil {
 			w.WriteHeader(http.StatusInternalServerError)
@@ -175,6 +180,15 @@ func (m *Mux) getEventsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 	w.WriteHeader(http.StatusOK)
+}
+
+func (m *Mux) listenAndBroadcastEvent() {
+	// multiplex events to multiple listeners
+	for event := range m.events {
+		for _, w := range m.eventListeners {
+			w <- event
+		}
+	}
 }
 
 func (m *Mux) router() *mux.Router {
