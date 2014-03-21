@@ -145,6 +145,7 @@ func (m *Mux) postSessionHandler(w http.ResponseWriter, r *http.Request) {
 			SessionId:       sessionId,
 			SessionServerId: session.ServerId,
 		}
+		delete(m.Sessions, sessionId)
 	}
 }
 
