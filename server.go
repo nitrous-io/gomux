@@ -186,6 +186,20 @@ func (m *Mux) getEventsHandler(w http.ResponseWriter, r *http.Request) {
 		return err
 	}
 	flush(nil)
+	// send all current sessions info as the first message
+	sessions := []SessionInfo{}
+	for sessionId, session := range m.Sessions {
+		sessions = append(sessions, SessionInfo{
+			SessionId:       sessionId,
+			SessionServerId: session.ServerId,
+		})
+	}
+	err := sendEvent(&Message{Event: "sessions", Sessions: sessions})
+	if err != nil {
+		w.WriteHeader(http.StatusInternalServerError)
+		return
+	}
+	// listening to all other events after
 	for event := range eventListener {
 		err := sendEvent(&event)
 		if err != nil {
