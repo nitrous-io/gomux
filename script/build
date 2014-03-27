@@ -1,0 +1,28 @@
+#!/bin/bash
+#
+# Build and install gomux binary as $GOPATH/bin/gomux and ./bin/gomux
+
+[ -n "$DEBUG" ] && set -o xtrace
+set -o errexit
+shopt -s nullglob
+
+# load helper
+current_dir=$(dirname "$BASH_SOURCE[0]")
+source $current_dir/helper
+
+ok "Installing dependencies"
+go get -d -v ./...
+
+if [[ $(uname) == "Linux" ]]; then
+  # get the parent directory of where this script is
+  DIR=$(current_dir)
+  GIT_COMMIT=$(latest_commit)
+  # Change into that directory
+  cd $DIR
+  ok "GO MUX $GIT_COMMIT"
+  go install -ldflags "-X main.version ${GIT_COMMIT}" -v $PACKAGE/...
+  cp_binary "gomux"
+else
+  error "SHOULD BUILD IN LINUX"
+  exit 1
+fi

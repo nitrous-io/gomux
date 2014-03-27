@@ -1,0 +1,51 @@
+#!/bin/bash
+#
+# Arguments:
+# --no-tag: dont built a new tag but use the most recent tag
+# This build, package the gomux binary and deploy to s3
+
+[ -n "$DEBUG" ] && set -o xtrace
+set -o errexit
+shopt -s nullglob
+
+# load helper
+current_dir=$(dirname "$BASH_SOURCE[0]")
+source $current_dir/helper
+
+# Change into that directory
+DIR=$(current_dir)
+./script/build
+
+ARG=$1
+GIT_COMMIT=$(latest_commit)
+# if an argument is defined, we only accept --no-tag and do an early exit if
+# encounter anything else
+if [[ $ARG ]]; then
+  if [ "$ARG" == "--no-tag" ]; then
+    TAG=$(latest_tag)
+  else
+    error "INVALID ARGUMENT: $ARG"
+    exit 1
+  fi
+# otherwise, take the current date and add that as a tag to git
+else
+  ok "ADDING GIT TAG"
+  TAG=`generate_tag`
+  USER=`git_user`
+  MSG="${USER} BUILT VERSION ${TAG} OF GOMUX"
+
+  ok "CHECKING NEW TAG TO GIT ${TAG}"
+  git tag -m "${MSG}" ${TAG}
+  ok "PUSHING NEW TAG TO GIT ${TAG}"
+  git push origin ${TAG}
+fi
+
+BINRELEASE="gomux_${GIT_COMMIT}.tgz"
+
+echo -e "${OK_COLOR}--> PACKAGE GOMUX!............${NO_COLOR}"
+cd bin
+tar -f ${BINRELEASE} -zv -c gomux
+tar -f gomux_latest.tgz -zv -c gomux
+
+echo -e "${OK_COLOR}--> PUSH TO S3!............${NO_COLOR}"
+s3cmd put ${BINRELEASE} s3://bombay-apse.action.io/${BINRELEASE}

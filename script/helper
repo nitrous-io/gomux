@@ -1,0 +1,59 @@
+#!/bin/bash
+#
+# Helpful functions and variables
+
+# colors
+NO_COLOR="\x1b[0m"
+OK_COLOR="\x1b[32;01m"
+ERROR_COLOR="\x1b[31;01m"
+WARN_COLOR="\x1b[33;01m"
+
+PACKAGE="github.com/action-io/gomux"
+
+# get the parent directory of where this script is
+current_dir() {
+  local source="${BASH_SOURCE[0]}"
+  while [ -h "$source" ] ; do source="$(readlink "$source")"; done
+  dir="$( cd -P "$( dirname "$source" )/.." && pwd )"
+  echo $dir
+}
+
+latest_commit() {
+  local commit=$(git rev-parse --short HEAD)
+  echo $commit
+}
+
+ok() {
+  local message=$1
+  echo -e "$OK_COLOR --> $message !....$NO_COLOR"
+}
+
+error() {
+  local message=$1
+  echo -e "$ERROR_COLOR --> $message !....$NO_COLOR"
+}
+
+cp_binary() {
+  local bin=$1
+  mkdir -p bin
+  if [ ! -z "$GOBIN" ]; then
+    cp $GOBIN/$bin bin/$bin
+  else
+    cp $GOPATH/bin/$bin bin/$bin
+  fi
+}
+
+latest_tag() {
+  local tag=`git tag | grep -E "[0-9\.]+$" | sort -nr | head -n 1`
+  echo $tag
+}
+
+generate_tag() {
+  local tag=`date -u +"%d-%b-%Y-%H-%M"`
+  echo $tag
+}
+
+git_user() {
+  local user=`git config user.name`
+  echo $user
+}
