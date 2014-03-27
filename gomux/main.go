@@ -17,14 +17,21 @@ using "gomux attach session_id"
 - gomux: start gomux server
 - gomux attach 1: attach to session 1`
 
+var version string
+
 const SERVER = "/tmp/gomux.sock"
 
 func main() {
 	flHelp := flag.Bool("h", false, "print help text")
+	flVersion := flag.Bool("v", false, "show current version")
 	flag.Parse()
 	if *flHelp {
 		fmt.Println(help)
 		os.Exit(0)
+		return
+	}
+	if *flVersion {
+		fmt.Println(version)
 		return
 	}
 	args := flag.Args()
