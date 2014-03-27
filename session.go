@@ -15,6 +15,7 @@ type Session struct {
 	ServerId int // easy id for a session instead of user-generated id
 	Pty      io.ReadWriter
 	NumConn  int
+	Name     string
 	writers  map[io.WriteCloser]bool
 	sizes    map[string]*Winsize
 }

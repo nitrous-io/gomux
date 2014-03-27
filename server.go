@@ -36,8 +36,18 @@ func (m *Mux) Connect(i string) *Session {
 		return s
 	}
 	s = NewSession(len(m.Sessions))
+	s.Name = generateName(i, m.nameChecker)
 	m.Sessions[i] = s
 	return s
+}
+
+func (m *Mux) nameChecker(chosen string) bool {
+	for _, session := range m.Sessions {
+		if session.Name == chosen {
+			return true
+		}
+	}
+	return false
 }
 
 func (m *Mux) Close() {
@@ -80,11 +90,11 @@ func (m *Mux) postResizeHandler(w http.ResponseWriter, r *http.Request) {
 	// broadcast this event
 	ws := session.Winsize()
 	m.events <- Message{
-		Event:           "resize",
-		SessionId:       sessionId,
-		SessionServerId: session.ServerId,
-		Width:           int(ws.Width),
-		Height:          int(ws.Height),
+		Event:    "resize",
+		Id:       sessionId,
+		ServerId: session.ServerId,
+		Width:    int(ws.Width),
+		Height:   int(ws.Height),
 	}
 	w.WriteHeader(http.StatusNoContent)
 }
@@ -130,9 +140,10 @@ func (m *Mux) postSessionHandler(w http.ResponseWriter, r *http.Request) {
 	session := m.Connect(sessionId)
 	fmt.Fprintf(stdout, "HTTP/1.1 200 OK\r\nContent-Type: application/vnd.gomux.raw-stream\r\n\r\n")
 	m.events <- Message{
-		Event:           "new_client",
-		SessionId:       sessionId,
-		SessionServerId: session.ServerId,
+		Event:    "new_client",
+		Id:       sessionId,
+		Name:     session.Name,
+		ServerId: session.ServerId,
 	}
 
 	<-session.Attach(stdin, stdout)
@@ -141,18 +152,22 @@ func (m *Mux) postSessionHandler(w http.ResponseWriter, r *http.Request) {
 	// the session is closed
 	if session.NumConn == 0 {
 		m.events <- Message{
-			Event:           "session_close",
-			SessionId:       sessionId,
-			SessionServerId: session.ServerId,
+			Event:    "session_close",
+			Id:       sessionId,
+			ServerId: session.ServerId,
 		}
 		delete(m.Sessions, sessionId)
 	}
 }
 
 func (m *Mux) getInfoHandler(w http.ResponseWriter, r *http.Request) {
-	activeSessions := []string{}
-	for sessionId, _ := range m.Sessions {
-		activeSessions = append(activeSessions, sessionId)
+	activeSessions := []SessionInfo{}
+	for sessionId, session := range m.Sessions {
+		activeSessions = append(activeSessions, SessionInfo{
+			Id:       sessionId,
+			ServerId: session.ServerId,
+			Name:     session.Name,
+		})
 	}
 	info, err := json.Marshal(Info{ActiveSessions: activeSessions})
 	if err != nil {
@@ -190,8 +205,9 @@ func (m *Mux) getEventsHandler(w http.ResponseWriter, r *http.Request) {
 	sessions := []SessionInfo{}
 	for sessionId, session := range m.Sessions {
 		sessions = append(sessions, SessionInfo{
-			SessionId:       sessionId,
-			SessionServerId: session.ServerId,
+			Id:       sessionId,
+			Name:     session.Name,
+			ServerId: session.ServerId,
 		})
 	}
 	err := sendEvent(&Message{Event: "sessions", Sessions: sessions})
