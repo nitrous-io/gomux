@@ -49,3 +49,4 @@ tar -f gomux_latest.tgz -zv -c gomux
 
 echo -e "${OK_COLOR}--> PUSH TO S3!............${NO_COLOR}"
 s3cmd put ${BINRELEASE} s3://bombay-apse.action.io/${BINRELEASE}
+s3cmd put gomux_latest.tgz s3://bombay-apse.action.io/gomux_latest.tgz
